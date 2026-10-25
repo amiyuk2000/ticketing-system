@@ -1,8 +1,11 @@
+from datetime import timedelta
+
 from django.contrib.auth.models import Group, User
 from django.test import TestCase, override_settings
 from django.urls import reverse
+from django.utils import timezone
 
-from .models import Ticket
+from .models import Comment, Floor, Property, Space, SubType, Ticket
 from .permissions import MANAGERS, TECHNICIANS
 
 
@@ -18,19 +21,39 @@ class TicketTestCase(TestCase):
         self.other_tech.groups.add(Group.objects.get(name=TECHNICIANS))
         self.staff = User.objects.create_user(username='sam', password='pass12345')
 
-        self.hvac = Ticket.objects.create(
-            title='AC broken', description='Too hot', location='Room 1',
-            category='hvac', priority=4, assigned_to=self.tech, created_by=self.staff,
+        self.building_a = Property.objects.create(name='Building A')
+        self.a_ground = Floor.objects.create(property=self.building_a, name='Ground Floor')
+        self.a_kitchen = Space.objects.create(floor=self.a_ground, name='Kitchen')
+        self.a_room1 = Space.objects.create(floor=self.a_ground, name='Room 1')
+        self.building_b = Property.objects.create(name='Building B')
+        self.b_first = Floor.objects.create(property=self.building_b, name='1st Floor')
+        self.b_office = Space.objects.create(floor=self.b_first, name='Office')
+
+        # Sub types are created by a data migration
+        self.no_cooling = SubType.objects.get(category='hvac', name='No cooling')
+        self.leak = SubType.objects.get(category='plumbing', name='Leak')
+
+        self.hvac = self.make_ticket(
+            title='AC broken', description='Too hot', space=self.a_room1,
+            category='hvac', sub_type=self.no_cooling, priority=4,
+            assigned_to=self.tech, created_by=self.staff,
         )
-        self.plumbing = Ticket.objects.create(
-            title='Leaking tap', description='Drip', location='Kitchen',
-            category='plumbing', priority=1, assigned_to=self.other_tech, created_by=self.manager,
+        self.plumbing = self.make_ticket(
+            title='Leaking tap', description='Drip', space=self.b_office,
+            category='plumbing', sub_type=self.leak, priority=1,
+            assigned_to=self.other_tech, created_by=self.manager,
         )
+
+    def make_ticket(self, space=None, **fields):
+        space = space or self.a_kitchen
+        fields.setdefault('description', 'x')
+        return Ticket.objects.create(property=space.floor.property, floor=space.floor, space=space, **fields)
 
     def ticket_data(self, **overrides):
         data = {
-            'title': 'AC broken', 'description': 'Too hot', 'location': 'Room 1',
-            'category': 'hvac', 'priority': 4, 'status': 'open',
+            'title': 'AC broken', 'description': 'Too hot',
+            'property': self.building_a.pk, 'floor': self.a_ground.pk, 'space': self.a_room1.pk,
+            'category': 'hvac', 'sub_type': self.no_cooling.pk, 'priority': 4, 'status': 'open',
         }
         data.update(overrides)
         return data
@@ -47,9 +70,9 @@ class TicketViewTests(TicketTestCase):
         self.assertContains(response, 'AC broken')
         self.assertNotContains(response, 'Leaking tap')
 
-    def test_list_filters_by_location(self):
+    def test_list_filters_by_property(self):
         self.client.force_login(self.manager)
-        response = self.client.get(reverse('ticket_list'), {'location': 'kitch'})
+        response = self.client.get(reverse('ticket_list'), {'property': self.building_b.pk})
         self.assertContains(response, 'Leaking tap')
         self.assertNotContains(response, 'AC broken')
 
@@ -59,12 +82,19 @@ class TicketViewTests(TicketTestCase):
         ticket = Ticket.objects.get(title='New light')
         self.assertRedirects(response, reverse('ticket_detail', args=[ticket.pk]))
         self.assertEqual(ticket.created_by, self.staff)
+        self.assertEqual(ticket.space, self.a_room1)
 
     def test_create_ticket_invalid_shows_form(self):
         self.client.force_login(self.staff)
         response = self.client.post(reverse('ticket_create'), {'title': ''})
         self.assertEqual(response.status_code, 200)
         self.assertFalse(Ticket.objects.filter(title='').exists())
+
+    def test_property_is_required(self):
+        self.client.force_login(self.staff)
+        response = self.client.post(reverse('ticket_create'), self.ticket_data(title='Nowhere', property='', floor='', space=''))
+        self.assertTrue(response.context['form'].errors['property'])
+        self.assertFalse(Ticket.objects.filter(title='Nowhere').exists())
 
     def test_detail_404_for_missing_ticket(self):
         self.client.force_login(self.staff)
@@ -84,6 +114,141 @@ class TicketViewTests(TicketTestCase):
         self.assertEqual(counts, {'hvac': 1, 'plumbing': 1})
 
 
+class LocationAndSubTypeTests(TicketTestCase):
+    def post_new(self, **overrides):
+        self.client.force_login(self.manager)
+        return self.client.post(reverse('ticket_create'), self.ticket_data(title='Check', **overrides))
+
+    def test_floor_must_belong_to_property(self):
+        response = self.post_new(floor=self.b_first.pk, space='')
+        self.assertIn('floor', response.context['form'].errors)
+
+    def test_space_must_be_on_floor(self):
+        response = self.post_new(space=self.b_office.pk)
+        self.assertIn('space', response.context['form'].errors)
+
+    def test_space_needs_a_floor(self):
+        response = self.post_new(floor='')
+        self.assertIn('space', response.context['form'].errors)
+
+    def test_sub_type_must_match_category(self):
+        response = self.post_new(category='hvac', sub_type=self.leak.pk)
+        self.assertIn('sub_type', response.context['form'].errors)
+
+    def test_floor_and_space_are_optional(self):
+        self.post_new(floor='', space='')
+        self.assertEqual(Ticket.objects.get(title='Check').location_display, 'Building A')
+
+    def test_options_are_tagged_for_chained_dropdowns(self):
+        self.client.force_login(self.manager)
+        response = self.client.get(reverse('ticket_create'))
+        self.assertContains(response, f'value="{self.a_ground.pk}" data-parent="{self.building_a.pk}"')
+        self.assertContains(response, f'value="{self.no_cooling.pk}" data-parent="hvac"')
+
+    def test_location_display(self):
+        self.assertEqual(self.hvac.location_display, 'Building A / Ground Floor / Room 1')
+
+
+class SlaTests(TicketTestCase):
+    def test_deadline_set_from_priority(self):
+        ticket = self.make_ticket(title='Urgent', priority=4)
+        self.assertAlmostEqual(ticket.complete_by, ticket.created_at + timedelta(hours=4), delta=timedelta(minutes=1))
+        low = self.make_ticket(title='Low', priority=1)
+        self.assertAlmostEqual(low.complete_by, low.created_at + timedelta(days=7), delta=timedelta(minutes=1))
+
+    def test_priority_change_moves_deadline(self):
+        self.client.force_login(self.manager)
+        self.client.post(reverse('ticket_edit', args=[self.plumbing.pk]), self.ticket_data(
+            title='Leaking tap', property=self.building_b.pk, floor=self.b_first.pk, space=self.b_office.pk,
+            category='plumbing', sub_type=self.leak.pk, priority=4,
+        ))
+        self.plumbing.refresh_from_db()
+        self.assertAlmostEqual(self.plumbing.complete_by, self.plumbing.created_at + timedelta(hours=4), delta=timedelta(minutes=1))
+
+    def test_manager_can_override_deadline(self):
+        due = (timezone.now() + timedelta(days=30)).replace(second=0, microsecond=0)
+        self.client.force_login(self.manager)
+        self.client.post(reverse('ticket_edit', args=[self.hvac.pk]), self.ticket_data(
+            priority=1, complete_by=due.strftime('%Y-%m-%dT%H:%M'),
+        ))
+        self.hvac.refresh_from_db()
+        self.assertEqual(self.hvac.complete_by, due)
+
+    def test_untouched_deadline_is_kept_on_save(self):
+        original = self.hvac.complete_by
+        self.client.force_login(self.manager)
+        form_page = self.client.get(reverse('ticket_edit', args=[self.hvac.pk]))
+        rendered = form_page.context['form']['complete_by'].value()
+        self.client.post(reverse('ticket_edit', args=[self.hvac.pk]), self.ticket_data(
+            description='Updated', complete_by=rendered.strftime('%Y-%m-%dT%H:%M'),
+        ))
+        self.hvac.refresh_from_db()
+        self.assertEqual(self.hvac.description, 'Updated')
+        self.assertEqual(self.hvac.complete_by, original)
+
+    def test_overdue(self):
+        Ticket.objects.filter(pk=self.hvac.pk).update(complete_by=timezone.now() - timedelta(hours=1))
+        self.hvac.refresh_from_db()
+        self.assertTrue(self.hvac.is_overdue)
+        self.hvac.status = 'resolved'
+        self.assertFalse(self.hvac.is_overdue)  # finished tickets are never overdue
+
+    def test_overdue_filter(self):
+        Ticket.objects.filter(pk=self.hvac.pk).update(complete_by=timezone.now() - timedelta(hours=1))
+        self.client.force_login(self.manager)
+        response = self.client.get(reverse('ticket_list'), {'overdue': '1'})
+        self.assertContains(response, 'AC broken')
+        self.assertNotContains(response, 'Leaking tap')
+
+    def test_response_time_recorded_once(self):
+        self.assertIsNone(self.hvac.responded_at)
+        self.hvac.status = 'in_progress'
+        self.hvac.save()
+        first_response = self.hvac.responded_at
+        self.assertIsNotNone(first_response)
+        self.hvac.status = 'resolved'
+        self.hvac.save()
+        self.assertEqual(self.hvac.responded_at, first_response)
+
+    def test_staff_cannot_set_deadline_or_cost(self):
+        self.client.force_login(self.staff)
+        self.client.post(reverse('ticket_create'), self.ticket_data(
+            title='Sneaky', complete_by='2099-01-01T00:00', cost_limit='99999',
+        ))
+        ticket = Ticket.objects.get(title='Sneaky')
+        self.assertIsNone(ticket.cost_limit)
+        self.assertLess(ticket.complete_by, timezone.now() + timedelta(days=1))
+
+
+class CommentTests(TicketTestCase):
+    def test_visible_user_can_comment(self):
+        self.client.force_login(self.tech)
+        response = self.client.post(reverse('ticket_comment', args=[self.hvac.pk]), {'body': 'On my way'})
+        self.assertRedirects(response, reverse('ticket_detail', args=[self.hvac.pk]))
+        comment = Comment.objects.get(ticket=self.hvac)
+        self.assertEqual((comment.author, comment.body), (self.tech, 'On my way'))
+
+    def test_comments_shown_on_ticket(self):
+        Comment.objects.create(ticket=self.hvac, author=self.tech, body='Parts ordered')
+        self.client.force_login(self.staff)
+        self.assertContains(self.client.get(reverse('ticket_detail', args=[self.hvac.pk])), 'Parts ordered')
+
+    def test_cannot_comment_on_hidden_ticket(self):
+        self.client.force_login(self.staff)
+        response = self.client.post(reverse('ticket_comment', args=[self.plumbing.pk]), {'body': 'Hi'})
+        self.assertEqual(response.status_code, 404)
+        self.assertFalse(Comment.objects.exists())
+
+    def test_empty_comment_rejected(self):
+        self.client.force_login(self.staff)
+        self.client.post(reverse('ticket_comment', args=[self.hvac.pk]), {'body': '   '})
+        self.assertFalse(Comment.objects.exists())
+
+    def test_comment_requires_post(self):
+        self.client.force_login(self.staff)
+        self.assertEqual(self.client.get(reverse('ticket_comment', args=[self.hvac.pk])).status_code, 405)
+
+
 class VisibilityTests(TicketTestCase):
     def listed_titles(self, user):
         self.client.force_login(user)
@@ -96,8 +261,8 @@ class VisibilityTests(TicketTestCase):
         self.assertEqual(self.listed_titles(self.staff), {'AC broken'})
 
     def test_technician_sees_assigned_and_reported_tickets(self):
-        Ticket.objects.create(title='Tech report', description='x', location='Hall', created_by=self.tech)
-        Ticket.objects.create(title='Unrelated', description='x', location='Hall', created_by=self.manager)
+        self.make_ticket(title='Tech report', created_by=self.tech)
+        self.make_ticket(title='Unrelated', created_by=self.manager)
         self.assertEqual(self.listed_titles(self.tech), {'AC broken', 'Tech report'})
 
     def test_hidden_ticket_detail_returns_404(self):
@@ -122,12 +287,13 @@ class PermissionTests(TicketTestCase):
         self.client.force_login(self.manager)
         response = self.client.post(
             reverse('ticket_edit', args=[self.hvac.pk]),
-            self.ticket_data(status='resolved', assigned_to=self.other_tech.pk),
+            self.ticket_data(status='resolved', assigned_to=self.other_tech.pk, cost_limit='350'),
         )
         self.assertRedirects(response, reverse('ticket_detail', args=[self.hvac.pk]))
         self.hvac.refresh_from_db()
         self.assertEqual(self.hvac.status, 'resolved')
         self.assertEqual(self.hvac.assigned_to, self.other_tech)
+        self.assertEqual(str(self.hvac.cost_limit), '350.00')
 
     def test_technician_can_only_change_status_of_assigned_ticket(self):
         self.client.force_login(self.tech)
@@ -142,9 +308,8 @@ class PermissionTests(TicketTestCase):
 
     def test_technician_cannot_edit_ticket_they_reported_once_assigned_elsewhere(self):
         # Visible to them (they reported it) but not editable: in progress, and not theirs to work on
-        ticket = Ticket.objects.create(
-            title='Tech report', description='x', location='Hall', status='in_progress',
-            created_by=self.tech, assigned_to=self.other_tech,
+        ticket = self.make_ticket(
+            title='Tech report', status='in_progress', created_by=self.tech, assigned_to=self.other_tech,
         )
         self.client.force_login(self.tech)
         response = self.client.get(reverse('ticket_edit', args=[ticket.pk]))
@@ -209,7 +374,7 @@ class PaginationTests(TicketTestCase):
     def setUp(self):
         super().setUp()
         Ticket.objects.bulk_create([
-            Ticket(title=f'Bulk {i}', description='x', location='Hall', category='other')
+            Ticket(title=f'Bulk {i}', description='x', property=self.building_a, category='other')
             for i in range(23)
         ])  # 25 tickets in total
 
@@ -232,6 +397,7 @@ class PaginationTests(TicketTestCase):
 
     def test_list_query_count_does_not_grow_with_rows(self):
         self.client.force_login(self.manager)
-        # session + user + groups (once, cached) + count + tickets with assignees in one join
-        with self.assertNumQueries(5):
+        # session + user + groups (once, cached) + count + tickets joined with
+        # assignee/location/sub type + properties for the filter dropdown
+        with self.assertNumQueries(6):
             self.client.get(reverse('ticket_list'))

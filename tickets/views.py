@@ -4,11 +4,17 @@ from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator
 from django.db.models import Count
-from .models import Ticket
-from .forms import TicketForm
+from django.utils import timezone
+from django.views.decorators.http import require_POST
+from .models import Property, Ticket
+from .forms import CommentForm, TicketForm
 from .permissions import creatable_fields, editable_fields, is_manager, manager_required, visible_tickets
 
 TICKETS_PER_PAGE = 10
+
+# select_related loads these in the same query as the tickets,
+# instead of one extra query per row in the table
+TABLE_RELATIONS = ['assigned_to', 'property', 'floor', 'space', 'sub_type']
 
 
 def paginate(request, queryset):
@@ -17,30 +23,32 @@ def paginate(request, queryset):
 
 @login_required
 def ticket_list(request):
-    # select_related loads each ticket's assignee in the same query,
-    # instead of one extra query per row in the table
-    tickets = visible_tickets(request.user).select_related('assigned_to')
+    tickets = visible_tickets(request.user).select_related(*TABLE_RELATIONS)
 
     # Filter tickets based on facilities criteria
-    location = request.GET.get('location')
+    property_id = request.GET.get('property')
     category = request.GET.get('category')
     priority = request.GET.get('priority')
     status = request.GET.get('status')
+    overdue = request.GET.get('overdue')
 
-    if location:
-        tickets = tickets.filter(location__icontains=location)
+    if property_id:
+        tickets = tickets.filter(property_id=property_id)
     if category:
         tickets = tickets.filter(category=category)
     if priority:
         tickets = tickets.filter(priority=priority)
     if status:
         tickets = tickets.filter(status=status)
+    if overdue:
+        tickets = tickets.filter(status__in=Ticket.ACTIVE_STATUSES, complete_by__lt=timezone.now())
 
     sees_all = is_manager(request.user)
     context = {
         'page_obj': paginate(request, tickets),
         'heading': 'All Tickets' if sees_all else 'My Tickets',
         'empty_message': 'No tickets found.' if sees_all else "No tickets found. Tickets you report will appear here.",
+        'properties': Property.objects.all(),
         'category_choices': Ticket.CATEGORY_CHOICES,
         'priority_choices': Ticket.PRIORITY_CHOICES,
         'status_choices': Ticket.STATUS_CHOICES,
@@ -56,7 +64,7 @@ def ticket_create(request):
             ticket = form.save(commit=False)
             ticket.created_by = request.user
             ticket.save()
-            messages.success(request, f'Ticket "{ticket.title}" created.')
+            messages.success(request, f'Ticket #{ticket.pk} "{ticket.title}" created.')
             return redirect('ticket_detail', pk=ticket.pk)
     else:
         form = TicketForm(allowed_fields=allowed)
@@ -64,7 +72,7 @@ def ticket_create(request):
 
 @login_required
 def ticket_edit(request, pk):
-    ticket = get_object_or_404(visible_tickets(request.user), pk=pk)
+    ticket = get_object_or_404(visible_tickets(request.user).select_related(*TABLE_RELATIONS, 'created_by'), pk=pk)
     allowed = editable_fields(request.user, ticket)
     if not allowed:
         raise PermissionDenied
@@ -72,7 +80,7 @@ def ticket_edit(request, pk):
         form = TicketForm(request.POST, instance=ticket, allowed_fields=allowed)
         if form.is_valid():
             form.save()
-            messages.success(request, f'Ticket "{ticket.title}" updated.')
+            messages.success(request, f'Ticket #{ticket.pk} "{ticket.title}" updated.')
             return redirect('ticket_detail', pk=ticket.pk)
     else:
         form = TicketForm(instance=ticket, allowed_fields=allowed)
@@ -81,16 +89,33 @@ def ticket_edit(request, pk):
 @login_required
 def ticket_detail(request, pk):
     # 404 (not 403) for tickets the user can't see, so it doesn't reveal that they exist
-    ticket = get_object_or_404(visible_tickets(request.user).select_related('assigned_to', 'created_by'), pk=pk)
+    ticket = get_object_or_404(visible_tickets(request.user).select_related(*TABLE_RELATIONS, 'created_by'), pk=pk)
     context = {
         'ticket': ticket,
         'can_edit': bool(editable_fields(request.user, ticket)),
+        'comments': ticket.comments.select_related('author'),
+        'comment_form': CommentForm(),
     }
     return render(request, 'tickets/ticket_detail.html', context)
 
 @login_required
+@require_POST
+def ticket_comment(request, pk):
+    ticket = get_object_or_404(visible_tickets(request.user), pk=pk)
+    form = CommentForm(request.POST)
+    if form.is_valid():
+        comment = form.save(commit=False)
+        comment.ticket = ticket
+        comment.author = request.user
+        comment.save()
+        messages.success(request, 'Comment added.')
+    else:
+        messages.error(request, 'Comment cannot be empty.')
+    return redirect('ticket_detail', pk=ticket.pk)
+
+@login_required
 def assigned_tickets(request):
-    tickets = Ticket.objects.filter(assigned_to=request.user).select_related('assigned_to')
+    tickets = Ticket.objects.filter(assigned_to=request.user).select_related(*TABLE_RELATIONS)
     context = {
         'page_obj': paginate(request, tickets),
     }

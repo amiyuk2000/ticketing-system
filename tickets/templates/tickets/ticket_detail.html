@@ -1,41 +1,47 @@
 {% extends 'base.html' %}
-{% load ticket_tags %}
 
-{% block title %}{{ ticket.title }} · Ticketing System{% endblock %}
+{% block title %}#{{ ticket.pk }} {{ ticket.title }} · Ticketing System{% endblock %}
 
 {% block content %}
 <a href="{% url 'ticket_list' %}" class="text-decoration-none"><i class="bi bi-arrow-left"></i> Back to tickets</a>
 
 <div class="d-flex justify-content-between align-items-start mt-2 mb-3 gap-3">
-    <div>
-        <h1 class="h3 mb-1">{{ ticket.title }}</h1>
-        <span class="badge {{ ticket.status|status_class }}">{{ ticket.get_status_display }}</span>
-        <span class="badge {{ ticket.priority|priority_class }}">{{ ticket.get_priority_display }} priority</span>
-    </div>
+    <h1 class="h3 mb-0"><span class="text-muted">#{{ ticket.pk }}</span> {{ ticket.title }}</h1>
     {% if can_edit %}
-    <a href="{% url 'ticket_edit' ticket.pk %}" class="btn btn-outline-primary"><i class="bi bi-pencil"></i> Edit</a>
+    <a href="{% url 'ticket_edit' ticket.pk %}" class="btn btn-outline-primary text-nowrap"><i class="bi bi-pencil"></i> Edit</a>
     {% endif %}
 </div>
 
-<div class="row g-3">
-    <div class="col-lg-8">
-        <div class="card shadow-sm h-100">
-            <div class="card-header bg-white fw-semibold">Description</div>
-            <div class="card-body">{{ ticket.description|linebreaksbr }}</div>
-        </div>
+{% include 'tickets/_ticket_summary.html' %}
+
+<div class="card shadow-sm mb-3">
+    <div class="card-header fw-semibold text-uppercase small text-muted">Description</div>
+    <div class="card-body">{{ ticket.description|linebreaksbr }}</div>
+</div>
+
+<div class="card shadow-sm">
+    <div class="card-header fw-semibold text-uppercase small text-muted">
+        Comments <span class="badge text-bg-light">{{ comments|length }}</span>
     </div>
-    <div class="col-lg-4">
-        <div class="card shadow-sm h-100">
-            <div class="card-header bg-white fw-semibold">Details</div>
-            <ul class="list-group list-group-flush">
-                <li class="list-group-item d-flex justify-content-between"><span class="text-muted">Location</span> {{ ticket.location }}</li>
-                <li class="list-group-item d-flex justify-content-between"><span class="text-muted">Category</span> {{ ticket.get_category_display }}</li>
-                <li class="list-group-item d-flex justify-content-between"><span class="text-muted">Assigned to</span> {{ ticket.assigned_to|default:"—" }}</li>
-                <li class="list-group-item d-flex justify-content-between"><span class="text-muted">Reported by</span> {{ ticket.created_by|default:"—" }}</li>
-                <li class="list-group-item d-flex justify-content-between"><span class="text-muted">Created</span> {{ ticket.created_at|date:"j M Y, H:i" }}</li>
-                <li class="list-group-item d-flex justify-content-between"><span class="text-muted">Updated</span> {{ ticket.updated_at|date:"j M Y, H:i" }}</li>
-            </ul>
-        </div>
+    <ul class="list-group list-group-flush">
+        {% for comment in comments %}
+        <li class="list-group-item">
+            <div class="d-flex justify-content-between small mb-1">
+                <span class="fw-semibold"><i class="bi bi-person-circle"></i> {{ comment.author|default:"Deleted user" }}</span>
+                <span class="text-muted">{{ comment.created_at|date:"j M Y, H:i" }}</span>
+            </div>
+            <div>{{ comment.body|linebreaksbr }}</div>
+        </li>
+        {% empty %}
+        <li class="list-group-item text-muted">No comments yet.</li>
+        {% endfor %}
+    </ul>
+    <div class="card-body border-top">
+        <form method="post" action="{% url 'ticket_comment' ticket.pk %}">
+            {% csrf_token %}
+            {{ comment_form.body }}
+            <button type="submit" class="btn btn-primary btn-sm mt-2"><i class="bi bi-chat-left-text"></i> Add comment</button>
+        </form>
     </div>
 </div>
 {% endblock %}

@@ -26,3 +26,18 @@ def priority_class(value):
 @register.filter
 def status_class(value):
     return STATUS_CLASSES.get(value, 'text-bg-light')
+
+
+@register.filter
+def duration(value):
+    """Format a timedelta compactly, e.g. "2d 3h", "4h 15m" or "12m"."""
+    if value is None:
+        return '—'
+    minutes = int(value.total_seconds() // 60)
+    days, minutes = divmod(minutes, 60 * 24)
+    hours, minutes = divmod(minutes, 60)
+    if days:
+        return f'{days}d {hours}h'
+    if hours:
+        return f'{hours}h {minutes}m'
+    return f'{minutes}m'

@@ -17,8 +17,8 @@ from .models import Ticket
 MANAGERS = 'Managers'
 TECHNICIANS = 'Technicians'
 
-ALL_FIELDS = ['title', 'description', 'location', 'category', 'priority', 'assigned_to', 'status']
-REPORTER_FIELDS = ['title', 'description', 'location', 'category', 'priority']
+REPORTER_FIELDS = ['title', 'description', 'property', 'floor', 'space', 'category', 'sub_type', 'priority']
+ALL_FIELDS = REPORTER_FIELDS + ['assigned_to', 'status', 'complete_by', 'cost_limit']
 TECHNICIAN_FIELDS = ['status']
 
 

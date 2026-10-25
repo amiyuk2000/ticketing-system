@@ -11,7 +11,12 @@
 <form method="get" class="card card-body shadow-sm mb-3">
     <div class="row g-2">
         <div class="col-md-3">
-            <input type="text" name="location" class="form-control" placeholder="Location" value="{{ request.GET.location }}">
+            <select name="property" class="form-select">
+                <option value="">All properties</option>
+                {% for property in properties %}
+                <option value="{{ property.pk }}" {% if request.GET.property == property.pk|stringformat:"s" %}selected{% endif %}>{{ property.name }}</option>
+                {% endfor %}
+            </select>
         </div>
         <div class="col-md-2">
             <select name="category" class="form-select">
@@ -37,7 +42,11 @@
                 {% endfor %}
             </select>
         </div>
-        <div class="col-md-3 d-flex gap-2">
+        <div class="col-md-3 d-flex align-items-center gap-2">
+            <div class="form-check text-nowrap me-1">
+                <input class="form-check-input" type="checkbox" name="overdue" value="1" id="filter-overdue" {% if request.GET.overdue %}checked{% endif %}>
+                <label class="form-check-label" for="filter-overdue">Overdue</label>
+            </div>
             <button type="submit" class="btn btn-primary flex-fill"><i class="bi bi-funnel"></i> Filter</button>
             <a href="{% url 'ticket_list' %}" class="btn btn-outline-secondary">Clear</a>
         </div>

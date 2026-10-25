@@ -1,35 +1,72 @@
 {% extends 'base.html' %}
 
-{% block title %}{% if ticket %}Edit Ticket{% else %}New Ticket{% endif %} · Ticketing System{% endblock %}
+{% block title %}{% if ticket %}Edit #{{ ticket.pk }}{% else %}New Ticket{% endif %} · Ticketing System{% endblock %}
 
 {% block content %}
-<div class="row justify-content-center">
-    <div class="col-lg-8">
-        <h1 class="h3 mb-3">{% if ticket %}Edit Ticket{% else %}New Ticket{% endif %}</h1>
+{% if ticket %}
+<a href="{% url 'ticket_detail' ticket.pk %}" class="text-decoration-none"><i class="bi bi-arrow-left"></i> Back to ticket</a>
+<h1 class="h3 mt-2 mb-3">Update work order <span class="text-muted">#{{ ticket.pk }}</span></h1>
+{% include 'tickets/_ticket_summary.html' %}
+{% else %}
+<h1 class="h3 mb-3">New Ticket</h1>
+{% endif %}
 
-        <form method="post" class="card card-body shadow-sm" novalidate>
-            {% csrf_token %}
-            {% for error in form.non_field_errors %}
-            <div class="alert alert-danger">{{ error }}</div>
-            {% endfor %}
+<form method="post" class="card card-body shadow-sm" novalidate>
+    {% csrf_token %}
+    {% for error in form.non_field_errors %}
+    <div class="alert alert-danger">{{ error }}</div>
+    {% endfor %}
 
-            <div class="row g-3">
-                {% for field in form %}
-                <div class="{% if field.name == 'title' or field.name == 'description' %}col-12{% else %}col-md-6{% endif %}">
-                    <label for="{{ field.id_for_label }}" class="form-label">{{ field.label }}</label>
-                    {{ field }}
-                    {% if field.errors %}
-                    <div class="text-danger small mt-1">{{ field.errors|join:" " }}</div>
-                    {% endif %}
-                </div>
-                {% endfor %}
+    <div class="row g-3">
+        {% for field in form %}
+            {% if field.field.section %}<div class="col-12"><div class="form-section">{{ field.field.section }}</div></div>{% endif %}
+            <div class="col-md-{{ field.field.col }}">
+                <label for="{{ field.id_for_label }}" class="form-label">
+                    {{ field.label }}{% if field.field.required %} <span class="text-danger">*</span>{% endif %}
+                </label>
+                {{ field }}
+                {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
+                {% if field.errors %}
+                <div class="text-danger small mt-1">{{ field.errors|join:" " }}</div>
+                {% endif %}
             </div>
-
-            <div class="d-flex gap-2 mt-4">
-                <button type="submit" class="btn btn-primary">{% if ticket %}Save Changes{% else %}Create Ticket{% endif %}</button>
-                <a href="{% if ticket %}{% url 'ticket_detail' ticket.pk %}{% else %}{% url 'ticket_list' %}{% endif %}" class="btn btn-outline-secondary">Cancel</a>
-            </div>
-        </form>
+        {% endfor %}
     </div>
-</div>
+
+    <div class="d-flex justify-content-between align-items-center mt-4">
+        <span class="text-muted small"><span class="text-danger">*</span> required field</span>
+        <div class="d-flex gap-2">
+            <a href="{% if ticket %}{% url 'ticket_detail' ticket.pk %}{% else %}{% url 'ticket_list' %}{% endif %}" class="btn btn-outline-secondary">Cancel</a>
+            <button type="submit" class="btn btn-primary">{% if ticket %}Update{% else %}Create Ticket{% endif %}</button>
+        </div>
+    </div>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Chained dropdowns: each select with data-chained-to only shows options whose
+// data-parent matches the parent's current value (Property → Floor → Space, Type → Sub type)
+document.querySelectorAll('select[data-chained-to]').forEach(function (child) {
+    var parent = document.getElementById('id_' + child.dataset.chainedTo);
+    if (!parent) return;
+    var allOptions = Array.from(child.options).map(function (option) { return option.cloneNode(true); });
+
+    function refresh() {
+        var current = child.value;
+        child.replaceChildren();
+        allOptions.forEach(function (option) {
+            if (!option.dataset.parent || option.dataset.parent === parent.value) {
+                child.appendChild(option.cloneNode(true));
+            }
+        });
+        var stillValid = Array.from(child.options).some(function (option) { return option.value === current; });
+        child.value = stillValid ? current : '';
+        child.dispatchEvent(new Event('change'));  // cascade, e.g. Property → Floor → Space
+    }
+
+    parent.addEventListener('change', refresh);
+    refresh();
+});
+</script>
 {% endblock %}

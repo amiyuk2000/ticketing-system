@@ -1,0 +1,32 @@
+{% load ticket_tags %}
+<div class="card shadow-sm mb-3">
+    <div class="card-header fw-semibold text-uppercase small text-muted">Work order details</div>
+    <div class="card-body py-2">
+        <div class="row row-cols-1 row-cols-md-2 summary-grid">
+            <div class="col"><span class="summary-label">Request ID</span> #{{ ticket.pk }}</div>
+            <div class="col"><span class="summary-label">Status</span> <span class="badge {{ ticket.status|status_class }}">{{ ticket.get_status_display }}</span></div>
+
+            <div class="col"><span class="summary-label">Property</span> {{ ticket.property|default:"—" }}</div>
+            <div class="col"><span class="summary-label">Floor</span> {{ ticket.floor|default:"—" }}</div>
+
+            <div class="col"><span class="summary-label">Space</span> {{ ticket.space|default:"—" }}</div>
+            <div class="col"><span class="summary-label">Reported by</span> {{ ticket.created_by|default:"—" }}</div>
+
+            <div class="col"><span class="summary-label">Type</span> {{ ticket.get_category_display }}</div>
+            <div class="col"><span class="summary-label">Sub type</span> {{ ticket.sub_type|default:"—" }}</div>
+
+            <div class="col"><span class="summary-label">Assigned to</span> {{ ticket.assigned_to|default:"—" }}</div>
+            <div class="col">
+                <span class="summary-label">Complete by</span>
+                {{ ticket.complete_by|date:"j M Y, H:i"|default:"—" }}
+                {% if ticket.is_overdue %}<span class="badge text-bg-danger ms-1">Overdue</span>{% endif %}
+            </div>
+
+            <div class="col"><span class="summary-label">Priority</span> <span class="badge {{ ticket.priority|priority_class }}">{{ ticket.get_priority_display }}</span></div>
+            <div class="col"><span class="summary-label">Response time</span> {% if ticket.response_time %}{{ ticket.response_time|duration }}{% else %}<span class="text-muted">Awaiting response</span>{% endif %}</div>
+
+            <div class="col"><span class="summary-label">Do not exceed</span> {% if ticket.cost_limit is not None %}{{ ticket.cost_limit|floatformat:2 }}{% else %}—{% endif %}</div>
+            <div class="col"><span class="summary-label">Created</span> {{ ticket.created_at|date:"j M Y, H:i" }}</div>
+        </div>
+    </div>
+</div>

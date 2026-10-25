@@ -17,15 +17,20 @@ A Django web app for reporting and tracking facilities issues (electrical, plumb
 
 ## Features
 
-- Create, view and edit tickets with title, description, location, category, priority, status and assignee
+- Work orders with a read-only summary panel and a sectioned edit form (Issue, Location, Classification, Work order)
+- **Structured locations**: Property → Floor → Space, with linked dropdowns that only offer floors in the chosen property and spaces on the chosen floor
+- **Type and sub type** (e.g. Electrical → Burnt bulb), with the sub type list following the chosen type
+- **SLA deadlines**: "Complete by" is set from the priority (Urgent 4 h, High 1 day, Medium 3 days, Low 7 days), moves when the priority changes, and can be overridden by a manager. Overdue tickets are flagged and filterable
+- **Response time** recorded automatically the first time a ticket leaves "Open"
+- **Comments** on every ticket, and a manager-set "Do not exceed" cost limit
 - **Role-based permissions** (Managers, Technicians, Staff) enforced on the server, not just hidden in the UI
-- Filter the ticket list by location (partial match), category, priority and status
+- Filter the ticket list by property, type, priority, status and overdue
 - **Pagination** that keeps the active filters when changing page
 - "My Assigned" view showing only the tickets assigned to the logged-in user
 - Manager-only report of tickets per category
 - Responsive Bootstrap 5 UI with colour-coded priority and status badges
 - Login and logout using Django's built-in authentication
-- Django admin for managing tickets, users and roles
+- Django admin for managing tickets, users, roles, properties/floors/spaces and sub types
 - **CI** with GitHub Actions: tests, system checks and a missing-migrations check on every push
 
 ## Roles and permissions
@@ -39,13 +44,16 @@ Roles are Django groups, created by a data migration. The rules live in one plac
 | Edit details of a ticket | Own tickets, while open | —                        | ✅      |
 | Change status            | —                       | Tickets assigned to them | ✅      |
 | Assign to a technician   | —                       | —                        | ✅      |
+| Set deadline and cost limit | —                    | —                        | ✅      |
+| Comment on a ticket      | Tickets they can see    | Tickets they can see     | ✅      |
 | View reports             | —                       | —                        | ✅      |
 
 Every ticket query starts from `visible_tickets(user)`, so a ticket outside a user's scope returns **404 Not Found**, even when they type its URL directly, and the response doesn't reveal that it exists. Each role only sees the form fields it may change, and the server ignores any other fields in a submitted form. Actions a role can't take on a ticket it *can* see return **403 Forbidden**. To give someone a role, add them to the **Managers** or **Technicians** group in the Django admin.
 
 ## Performance notes
 
-- The ticket list uses `select_related('assigned_to')`, so assignee names are loaded in the same SQL query as the tickets. Without it, a page of 10 tickets would run 10 extra queries (the "N+1 query" problem). A test checks that the query count stays fixed.
+- The ticket list uses `select_related` for the assignee, property, floor, space and sub type, so they're loaded in the same SQL query as the tickets. Without it, a page of 10 tickets would run up to 50 extra queries (the "N+1 query" problem). A test checks that the query count stays fixed.
+- A user's roles are looked up once per request and cached, rather than once per permission check.
 - Lists are paginated at 10 tickets per page with Django's `Paginator`, so pages stay fast as the number of tickets grows.
 
 ## Tech stack
@@ -59,16 +67,17 @@ Every ticket query starts from `visible_tickets(user)`, so a ticket outside a us
 ```
 ticketing_system/      Project settings and URL routing
 tickets/
-  models.py            Ticket model
-  views.py             List, create, detail, edit, assigned and report views
-  forms.py             Ticket ModelForm (shows only the fields a role may change)
+  models.py            Ticket, Comment, Property/Floor/Space and SubType models; SLA logic
+  views.py             List, create, detail, edit, comment, assigned and report views
+  forms.py             Ticket form (only the fields a role may change) and linked-dropdown widget
+  migrations/          Schema changes, plus data migrations for roles, sub types and old locations
   permissions.py       Role rules: who can create, edit and view what
   context_processors.py  Makes the user's role available to templates
   templates/           HTML templates (base layout, tickets/, registration/, 403)
   templatetags/        Badge colour filters
   management/commands/
-    seed_demo.py       Creates one demo user per role and sample tickets
-  tests.py             View, permission and pagination tests
+    seed_demo.py       Creates demo users, locations, sample tickets and comments
+  tests.py             View, permission, location, SLA, comment and pagination tests
 .github/workflows/
   tests.yml            GitHub Actions CI
 ```
