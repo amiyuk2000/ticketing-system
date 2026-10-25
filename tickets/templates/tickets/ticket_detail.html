@@ -1,0 +1,20 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<h1>{{ ticket.title }}</h1>
+
+<table>
+    <tr><th>Location</th><td>{{ ticket.location }}</td></tr>
+    <tr><th>Category</th><td>{{ ticket.get_category_display }}</td></tr>
+    <tr><th>Priority</th><td>{{ ticket.get_priority_display }}</td></tr>
+    <tr><th>Status</th><td>{{ ticket.get_status_display }}</td></tr>
+    <tr><th>Assigned To</th><td>{{ ticket.assigned_to|default:"—" }}</td></tr>
+    <tr><th>Created</th><td>{{ ticket.created_at }}</td></tr>
+    <tr><th>Updated</th><td>{{ ticket.updated_at }}</td></tr>
+</table>
+
+<h2>Description</h2>
+<p>{{ ticket.description|linebreaksbr }}</p>
+
+<a href="{% url 'ticket_list' %}">&larr; Back to tickets</a>
+{% endblock %}

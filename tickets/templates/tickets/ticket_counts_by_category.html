@@ -1,0 +1,22 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<h1>Ticket Counts by Category</h1>
+
+<table>
+    <thead>
+        <tr>
+            <th>Category</th>
+            <th>Count</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for count in ticket_counts %}
+        <tr>
+            <td>{{ count.category }}</td>
+            <td>{{ count.count }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

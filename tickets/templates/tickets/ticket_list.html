@@ -1,0 +1,57 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<h1>Tickets</h1>
+
+<form method="get" class="filters">
+    <input type="text" name="location" placeholder="Location" value="{{ request.GET.location }}">
+    <select name="category">
+        <option value="">All categories</option>
+        {% for value, label in category_choices %}
+        <option value="{{ value }}" {% if request.GET.category == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+    </select>
+    <select name="priority">
+        <option value="">All priorities</option>
+        {% for value, label in priority_choices %}
+        <option value="{{ value }}" {% if request.GET.priority == value|stringformat:"s" %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+    </select>
+    <select name="status">
+        <option value="">All statuses</option>
+        {% for value, label in status_choices %}
+        <option value="{{ value }}" {% if request.GET.status == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+    </select>
+    <button type="submit" class="btn">Filter</button>
+</form>
+
+<table>
+    <thead>
+        <tr>
+            <th>Title</th>
+            <th>Location</th>
+            <th>Category</th>
+            <th>Priority</th>
+            <th>Status</th>
+            <th>Assigned To</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for ticket in tickets %}
+        <tr>
+            <td><a href="{% url 'ticket_detail' ticket.id %}">{{ ticket.title }}</a></td>
+            <td>{{ ticket.location }}</td>
+            <td>{{ ticket.get_category_display }}</td>
+            <td>{{ ticket.get_priority_display }}</td>
+            <td>{{ ticket.get_status_display }}</td>
+            <td>{{ ticket.assigned_to|default:"—" }}</td>
+        </tr>
+        {% empty %}
+        <tr>
+            <td colspan="6">No tickets found.</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

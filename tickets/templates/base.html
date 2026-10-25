@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Ticketing System{% endblock %}</title>
+    <style>
+        body { font-family: system-ui, sans-serif; margin: 0; background: #f5f6f8; color: #222; }
+        nav { background: #2c3e50; padding: 12px 24px; display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+        nav a, nav button { color: #fff; text-decoration: none; background: none; border: none; font: inherit; cursor: pointer; padding: 0; }
+        nav .spacer { flex: 1; }
+        main { max-width: 1000px; margin: 24px auto; padding: 0 16px; }
+        table { width: 100%; border-collapse: collapse; background: #fff; }
+        th, td { padding: 8px 12px; border-bottom: 1px solid #ddd; text-align: left; }
+        th { background: #ecf0f1; }
+        form p { margin: 12px 0; }
+        input, select, textarea { padding: 6px; font: inherit; }
+        .btn { display: inline-block; background: #2980b9; color: #fff; padding: 8px 14px; border: none; border-radius: 4px; text-decoration: none; cursor: pointer; }
+        .filters { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+    </style>
+</head>
+<body>
+    <nav>
+        <a href="{% url 'ticket_list' %}">All Tickets</a>
+        {% if user.is_authenticated %}
+        <a href="{% url 'ticket_create' %}">New Ticket</a>
+        <a href="{% url 'assigned_tickets' %}">My Assigned</a>
+        <a href="{% url 'ticket_counts_by_category' %}">Counts by Category</a>
+        <span class="spacer"></span>
+        <span style="color:#bbb">{{ user.username }}</span>
+        <form method="post" action="{% url 'logout' %}" style="margin:0">
+            {% csrf_token %}
+            <button type="submit">Log out</button>
+        </form>
+        {% endif %}
+    </nav>
+    <main>
+        {% block content %}{% endblock %}
+    </main>
+</body>
+</html>
