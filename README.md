@@ -1,9 +1,16 @@
 # Facilities Ticketing System
 
-A Django web app for reporting and tracking facilities issues (electrical, plumbing, HVAC, cleaning) across buildings. Staff log in, raise tickets, filter them by location, category, priority and status, and see the tickets assigned to them.
+[![Tests](https://github.com/amiyuk2000/ticketing-system/actions/workflows/tests.yml/badge.svg)](https://github.com/amiyuk2000/ticketing-system/actions/workflows/tests.yml)
+
+A Django web app for reporting and tracking facilities issues (electrical, plumbing, HVAC, cleaning) across buildings. Staff report problems, managers triage and assign them, and technicians work through the tickets assigned to them.
 
 **Live demo:** https://amiyuk2000.pythonanywhere.com
-**Demo login:** `demo` / `demo1234`
+
+| Demo account | Password   | Role                                          |
+|--------------|------------|-----------------------------------------------|
+| `manager`    | `demo1234` | Full access: assign tickets, view reports     |
+| `technician` | `demo1234` | Update the status of tickets assigned to them |
+| `staff`      | `demo1234` | Report issues, edit their own open tickets    |
 
 <!-- Add a screenshot: save it as docs/screenshot.png and uncomment the line below -->
 <!-- ![Ticket list](docs/screenshot.png) -->
@@ -11,12 +18,35 @@ A Django web app for reporting and tracking facilities issues (electrical, plumb
 ## Features
 
 - Create, view and edit tickets with title, description, location, category, priority, status and assignee
-- Responsive Bootstrap 5 UI with colour-coded priority and status badges
+- **Role-based permissions** (Managers, Technicians, Staff) enforced on the server, not just hidden in the UI
 - Filter the ticket list by location (partial match), category, priority and status
+- **Pagination** that keeps the active filters when changing page
 - "My Assigned" view showing only the tickets assigned to the logged-in user
-- Ticket counts per category
+- Manager-only report of tickets per category
+- Responsive Bootstrap 5 UI with colour-coded priority and status badges
 - Login and logout using Django's built-in authentication
-- Django admin for managing tickets and users
+- Django admin for managing tickets, users and roles
+- **CI** with GitHub Actions: tests, system checks and a missing-migrations check on every push
+
+## Roles and permissions
+
+Roles are Django groups, created by a data migration. The rules live in one place, [`tickets/permissions.py`](tickets/permissions.py):
+
+| Action                   | Staff                   | Technician               | Manager |
+|--------------------------|-------------------------|--------------------------|---------|
+| View and filter tickets  | ✅                      | ✅                       | ✅      |
+| Report a ticket          | ✅                      | ✅                       | ✅      |
+| Edit details of a ticket | Own tickets, while open | —                        | ✅      |
+| Change status            | —                       | Tickets assigned to them | ✅      |
+| Assign to a technician   | —                       | —                        | ✅      |
+| View reports             | —                       | —                        | ✅      |
+
+Each role only sees the form fields it may change, and the server ignores any other fields in a submitted form. Pages a role can't use return **403 Forbidden**. To give someone a role, add them to the **Managers** or **Technicians** group in the Django admin.
+
+## Performance notes
+
+- The ticket list uses `select_related('assigned_to')`, so assignee names are loaded in the same SQL query as the tickets. Without it, a page of 10 tickets would run 10 extra queries (the "N+1 query" problem). A test checks that the query count stays fixed.
+- Lists are paginated at 10 tickets per page with Django's `Paginator`, so pages stay fast as the number of tickets grows.
 
 ## Tech stack
 
@@ -30,12 +60,17 @@ A Django web app for reporting and tracking facilities issues (electrical, plumb
 ticketing_system/      Project settings and URL routing
 tickets/
   models.py            Ticket model
-  views.py             List, create, detail, assigned and counts views
-  forms.py             Ticket ModelForm
-  templates/           HTML templates (base layout, tickets/, registration/)
+  views.py             List, create, detail, edit, assigned and report views
+  forms.py             Ticket ModelForm (shows only the fields a role may change)
+  permissions.py       Role rules: who can create, edit and view what
+  context_processors.py  Makes the user's role available to templates
+  templates/           HTML templates (base layout, tickets/, registration/, 403)
+  templatetags/        Badge colour filters
   management/commands/
-    seed_demo.py       Creates a demo user and sample tickets
-  tests.py             View tests
+    seed_demo.py       Creates one demo user per role and sample tickets
+  tests.py             View, permission and pagination tests
+.github/workflows/
+  tests.yml            GitHub Actions CI
 ```
 
 ## Running locally
@@ -48,11 +83,11 @@ venv\Scripts\activate          # Windows
 # source venv/bin/activate     # macOS / Linux
 pip install -r requirements.txt
 python manage.py migrate
-python manage.py seed_demo     # optional: demo user + sample tickets
+python manage.py seed_demo     # optional: demo users + sample tickets
 python manage.py runserver
 ```
 
-Open http://127.0.0.1:8000/ and log in with `demo` / `demo1234`.
+Open http://127.0.0.1:8000/ and log in as `manager`, `technician` or `staff` (password `demo1234`).
 To use the admin at `/admin/`, create an account with `python manage.py createsuperuser`.
 
 ## Running tests

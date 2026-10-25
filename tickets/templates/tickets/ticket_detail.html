@@ -12,7 +12,9 @@
         <span class="badge {{ ticket.status|status_class }}">{{ ticket.get_status_display }}</span>
         <span class="badge {{ ticket.priority|priority_class }}">{{ ticket.get_priority_display }} priority</span>
     </div>
+    {% if can_edit %}
     <a href="{% url 'ticket_edit' ticket.pk %}" class="btn btn-outline-primary"><i class="bi bi-pencil"></i> Edit</a>
+    {% endif %}
 </div>
 
 <div class="row g-3">
@@ -29,6 +31,7 @@
                 <li class="list-group-item d-flex justify-content-between"><span class="text-muted">Location</span> {{ ticket.location }}</li>
                 <li class="list-group-item d-flex justify-content-between"><span class="text-muted">Category</span> {{ ticket.get_category_display }}</li>
                 <li class="list-group-item d-flex justify-content-between"><span class="text-muted">Assigned to</span> {{ ticket.assigned_to|default:"—" }}</li>
+                <li class="list-group-item d-flex justify-content-between"><span class="text-muted">Reported by</span> {{ ticket.created_by|default:"—" }}</li>
                 <li class="list-group-item d-flex justify-content-between"><span class="text-muted">Created</span> {{ ticket.created_at|date:"j M Y, H:i" }}</li>
                 <li class="list-group-item d-flex justify-content-between"><span class="text-muted">Updated</span> {{ ticket.updated_at|date:"j M Y, H:i" }}</li>
             </ul>

@@ -5,7 +5,7 @@
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h1 class="h3 mb-0">My Assigned Tickets</h1>
-    <span class="text-muted">{{ tickets|length }} ticket{{ tickets|length|pluralize }}</span>
+    <span class="text-muted">{{ page_obj.paginator.count }} ticket{{ page_obj.paginator.count|pluralize }}</span>
 </div>
 
 {% include 'tickets/_ticket_table.html' with empty_message="No tickets are assigned to you." %}

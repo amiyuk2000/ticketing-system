@@ -30,9 +30,13 @@ class Ticket(models.Model):
     category = models.CharField(max_length=20, choices=CATEGORY_CHOICES, default='other')
     priority = models.IntegerField(choices=PRIORITY_CHOICES, default=2)
     assigned_to = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='created_tickets', editable=False)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='open')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
 
     def __str__(self):
         return self.title
