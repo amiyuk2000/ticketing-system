@@ -2,7 +2,7 @@
 
 A Django web app for reporting and tracking facilities issues (electrical, plumbing, HVAC, cleaning) across buildings. Staff log in, raise tickets, filter them by location, category, priority and status, and see the tickets assigned to them.
 
-**Live demo:** https://YOUR-USERNAME.pythonanywhere.com
+**Live demo:** https://amiyuk2000.pythonanywhere.com
 **Demo login:** `demo` / `demo1234`
 
 <!-- Add a screenshot: save it as docs/screenshot.png and uncomment the line below -->
@@ -40,7 +40,7 @@ tickets/
 ## Running locally
 
 ```bash
-git clone https://github.com/YOUR-USERNAME/ticketing-system.git
+git clone https://github.com/amiyuk2000/ticketing-system.git
 cd ticketing-system
 python -m venv venv
 venv\Scripts\activate          # Windows
@@ -68,13 +68,13 @@ Settings are read from environment variables. The defaults work for local develo
 |------------------------|--------------------|--------------------------------------|
 | `DJANGO_SECRET_KEY`    | insecure dev key   | a long random string                 |
 | `DJANGO_DEBUG`         | `True`             | `False`                              |
-| `DJANGO_ALLOWED_HOSTS` | empty (localhost)  | `YOUR-USERNAME.pythonanywhere.com`   |
+| `DJANGO_ALLOWED_HOSTS` | empty (localhost)  | `amiyuk2000.pythonanywhere.com`   |
 
 ## Deploying to PythonAnywhere
 
 1. In a PythonAnywhere Bash console:
    ```bash
-   git clone https://github.com/YOUR-USERNAME/ticketing-system.git
+   git clone https://github.com/amiyuk2000/ticketing-system.git
    cd ticketing-system
    mkvirtualenv venv --python=python3.12
    pip install -r requirements.txt
@@ -83,25 +83,25 @@ Settings are read from environment variables. The defaults work for local develo
    python manage.py seed_demo
    ```
 2. On the **Web** tab, add a new web app with **Manual configuration** and Python 3.12.
-3. Set **Virtualenv** to `/home/YOUR-USERNAME/.virtualenvs/venv`.
+3. Set **Virtualenv** to `/home/amiyuk2000/.virtualenvs/venv`.
 4. Replace the contents of the **WSGI configuration file** with:
    ```python
    import os, sys
-   path = '/home/YOUR-USERNAME/ticketing-system'
+   path = '/home/amiyuk2000/ticketing-system'
    if path not in sys.path:
        sys.path.insert(0, path)
 
    os.environ['DJANGO_SETTINGS_MODULE'] = 'ticketing_system.settings'
    os.environ['DJANGO_SECRET_KEY'] = 'paste-a-long-random-string-here'
    os.environ['DJANGO_DEBUG'] = 'False'
-   os.environ['DJANGO_ALLOWED_HOSTS'] = 'YOUR-USERNAME.pythonanywhere.com'
+   os.environ['DJANGO_ALLOWED_HOSTS'] = 'amiyuk2000.pythonanywhere.com'
 
    from django.core.wsgi import get_wsgi_application
    application = get_wsgi_application()
    ```
    To generate a secret key:
    `python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"`
-5. Under **Static files**, map URL `/static/` to `/home/YOUR-USERNAME/ticketing-system/staticfiles`.
+5. Under **Static files**, map URL `/static/` to `/home/amiyuk2000/ticketing-system/staticfiles`.
 6. Under **Security**, turn on **Force HTTPS**.
 7. Click **Reload**.
 
