@@ -6,7 +6,7 @@ from django.core.paginator import Paginator
 from django.db.models import Count
 from .models import Ticket
 from .forms import TicketForm
-from .permissions import creatable_fields, editable_fields, manager_required
+from .permissions import creatable_fields, editable_fields, is_manager, manager_required, visible_tickets
 
 TICKETS_PER_PAGE = 10
 
@@ -19,7 +19,7 @@ def paginate(request, queryset):
 def ticket_list(request):
     # select_related loads each ticket's assignee in the same query,
     # instead of one extra query per row in the table
-    tickets = Ticket.objects.select_related('assigned_to')
+    tickets = visible_tickets(request.user).select_related('assigned_to')
 
     # Filter tickets based on facilities criteria
     location = request.GET.get('location')
@@ -36,8 +36,11 @@ def ticket_list(request):
     if status:
         tickets = tickets.filter(status=status)
 
+    sees_all = is_manager(request.user)
     context = {
         'page_obj': paginate(request, tickets),
+        'heading': 'All Tickets' if sees_all else 'My Tickets',
+        'empty_message': 'No tickets found.' if sees_all else "No tickets found. Tickets you report will appear here.",
         'category_choices': Ticket.CATEGORY_CHOICES,
         'priority_choices': Ticket.PRIORITY_CHOICES,
         'status_choices': Ticket.STATUS_CHOICES,
@@ -61,7 +64,7 @@ def ticket_create(request):
 
 @login_required
 def ticket_edit(request, pk):
-    ticket = get_object_or_404(Ticket, pk=pk)
+    ticket = get_object_or_404(visible_tickets(request.user), pk=pk)
     allowed = editable_fields(request.user, ticket)
     if not allowed:
         raise PermissionDenied
@@ -77,7 +80,8 @@ def ticket_edit(request, pk):
 
 @login_required
 def ticket_detail(request, pk):
-    ticket = get_object_or_404(Ticket.objects.select_related('assigned_to', 'created_by'), pk=pk)
+    # 404 (not 403) for tickets the user can't see, so it doesn't reveal that they exist
+    ticket = get_object_or_404(visible_tickets(request.user).select_related('assigned_to', 'created_by'), pk=pk)
     context = {
         'ticket': ticket,
         'can_edit': bool(editable_fields(request.user, ticket)),

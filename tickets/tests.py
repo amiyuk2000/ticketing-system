@@ -42,13 +42,13 @@ class TicketViewTests(TicketTestCase):
         self.assertRedirects(response, f"{reverse('login')}?next={reverse('ticket_list')}")
 
     def test_list_filters_by_category(self):
-        self.client.force_login(self.staff)
+        self.client.force_login(self.manager)
         response = self.client.get(reverse('ticket_list'), {'category': 'hvac'})
         self.assertContains(response, 'AC broken')
         self.assertNotContains(response, 'Leaking tap')
 
     def test_list_filters_by_location(self):
-        self.client.force_login(self.staff)
+        self.client.force_login(self.manager)
         response = self.client.get(reverse('ticket_list'), {'location': 'kitch'})
         self.assertContains(response, 'Leaking tap')
         self.assertNotContains(response, 'AC broken')
@@ -84,6 +84,39 @@ class TicketViewTests(TicketTestCase):
         self.assertEqual(counts, {'hvac': 1, 'plumbing': 1})
 
 
+class VisibilityTests(TicketTestCase):
+    def listed_titles(self, user):
+        self.client.force_login(user)
+        return {t.title for t in self.client.get(reverse('ticket_list')).context['page_obj']}
+
+    def test_manager_sees_all_tickets(self):
+        self.assertEqual(self.listed_titles(self.manager), {'AC broken', 'Leaking tap'})
+
+    def test_staff_sees_only_tickets_they_reported(self):
+        self.assertEqual(self.listed_titles(self.staff), {'AC broken'})
+
+    def test_technician_sees_assigned_and_reported_tickets(self):
+        Ticket.objects.create(title='Tech report', description='x', location='Hall', created_by=self.tech)
+        Ticket.objects.create(title='Unrelated', description='x', location='Hall', created_by=self.manager)
+        self.assertEqual(self.listed_titles(self.tech), {'AC broken', 'Tech report'})
+
+    def test_hidden_ticket_detail_returns_404(self):
+        self.client.force_login(self.staff)
+        response = self.client.get(reverse('ticket_detail', args=[self.plumbing.pk]))
+        self.assertEqual(response.status_code, 404)
+
+    def test_hidden_ticket_edit_returns_404(self):
+        self.client.force_login(self.tech)
+        response = self.client.get(reverse('ticket_edit', args=[self.plumbing.pk]))
+        self.assertEqual(response.status_code, 404)
+
+    def test_heading_reflects_scope(self):
+        self.client.force_login(self.staff)
+        self.assertContains(self.client.get(reverse('ticket_list')), 'My Tickets')
+        self.client.force_login(self.manager)
+        self.assertContains(self.client.get(reverse('ticket_list')), 'All Tickets')
+
+
 class PermissionTests(TicketTestCase):
     def test_manager_can_edit_and_assign_any_ticket(self):
         self.client.force_login(self.manager)
@@ -107,9 +140,14 @@ class PermissionTests(TicketTestCase):
         self.assertEqual(self.hvac.title, 'AC broken')  # other fields ignored
         self.assertEqual(self.hvac.priority, 4)
 
-    def test_technician_cannot_edit_unassigned_ticket(self):
+    def test_technician_cannot_edit_ticket_they_reported_once_assigned_elsewhere(self):
+        # Visible to them (they reported it) but not editable: in progress, and not theirs to work on
+        ticket = Ticket.objects.create(
+            title='Tech report', description='x', location='Hall', status='in_progress',
+            created_by=self.tech, assigned_to=self.other_tech,
+        )
         self.client.force_login(self.tech)
-        response = self.client.get(reverse('ticket_edit', args=[self.plumbing.pk]))
+        response = self.client.get(reverse('ticket_edit', args=[ticket.pk]))
         self.assertEqual(response.status_code, 403)
 
     def test_staff_can_edit_own_open_ticket_but_not_status(self):
@@ -132,7 +170,9 @@ class PermissionTests(TicketTestCase):
     def test_staff_cannot_edit_others_ticket(self):
         self.client.force_login(self.staff)
         response = self.client.post(reverse('ticket_edit', args=[self.plumbing.pk]), self.ticket_data())
-        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.status_code, 404)
+        self.plumbing.refresh_from_db()
+        self.assertEqual(self.plumbing.title, 'Leaking tap')
 
     def test_staff_cannot_assign_or_set_status_on_create(self):
         self.client.force_login(self.staff)
@@ -151,9 +191,12 @@ class PermissionTests(TicketTestCase):
         self.assertEqual(self.client.get(reverse('ticket_counts_by_category')).status_code, 403)
 
     def test_edit_button_hidden_without_permission(self):
+        self.hvac.status = 'in_progress'
+        self.hvac.save()
         self.client.force_login(self.staff)
-        response = self.client.get(reverse('ticket_detail', args=[self.plumbing.pk]))
-        self.assertNotContains(response, reverse('ticket_edit', args=[self.plumbing.pk]))
+        response = self.client.get(reverse('ticket_detail', args=[self.hvac.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, reverse('ticket_edit', args=[self.hvac.pk]))
 
     def test_assignee_choices_limited_to_technicians(self):
         self.client.force_login(self.manager)
@@ -171,24 +214,24 @@ class PaginationTests(TicketTestCase):
         ])  # 25 tickets in total
 
     def test_list_is_paginated(self):
-        self.client.force_login(self.staff)
+        self.client.force_login(self.manager)
         response = self.client.get(reverse('ticket_list'))
         self.assertEqual(len(response.context['page_obj']), 10)
         self.assertEqual(response.context['page_obj'].paginator.num_pages, 3)
 
     def test_last_page_and_out_of_range(self):
-        self.client.force_login(self.staff)
+        self.client.force_login(self.manager)
         self.assertEqual(len(self.client.get(reverse('ticket_list'), {'page': 3}).context['page_obj']), 5)
         # An invalid page number falls back to the last page instead of erroring
         self.assertEqual(self.client.get(reverse('ticket_list'), {'page': 99}).context['page_obj'].number, 3)
 
     def test_page_links_keep_filters(self):
-        self.client.force_login(self.staff)
+        self.client.force_login(self.manager)
         response = self.client.get(reverse('ticket_list'), {'category': 'other'})
         self.assertContains(response, '?category=other&amp;page=2')
 
     def test_list_query_count_does_not_grow_with_rows(self):
-        self.client.force_login(self.staff)
-        # session + user + groups (role checks) + count + tickets with assignees in one join
-        with self.assertNumQueries(7):
+        self.client.force_login(self.manager)
+        # session + user + groups (once, cached) + count + tickets with assignees in one join
+        with self.assertNumQueries(5):
             self.client.get(reverse('ticket_list'))

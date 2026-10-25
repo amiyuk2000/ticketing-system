@@ -34,14 +34,14 @@ Roles are Django groups, created by a data migration. The rules live in one plac
 
 | Action                   | Staff                   | Technician               | Manager |
 |--------------------------|-------------------------|--------------------------|---------|
-| View and filter tickets  | ✅                      | ✅                       | ✅      |
+| See and filter tickets   | Ones they reported      | Assigned to them, or reported by them | All     |
 | Report a ticket          | ✅                      | ✅                       | ✅      |
 | Edit details of a ticket | Own tickets, while open | —                        | ✅      |
 | Change status            | —                       | Tickets assigned to them | ✅      |
 | Assign to a technician   | —                       | —                        | ✅      |
 | View reports             | —                       | —                        | ✅      |
 
-Each role only sees the form fields it may change, and the server ignores any other fields in a submitted form. Pages a role can't use return **403 Forbidden**. To give someone a role, add them to the **Managers** or **Technicians** group in the Django admin.
+Every ticket query starts from `visible_tickets(user)`, so a ticket outside a user's scope returns **404 Not Found**, even when they type its URL directly, and the response doesn't reveal that it exists. Each role only sees the form fields it may change, and the server ignores any other fields in a submitted form. Actions a role can't take on a ticket it *can* see return **403 Forbidden**. To give someone a role, add them to the **Managers** or **Technicians** group in the Django admin.
 
 ## Performance notes
 

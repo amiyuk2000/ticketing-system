@@ -1,13 +1,18 @@
 """Role-based rules for who can do what with tickets.
 
 Roles are Django groups (created in migration 0005):
-- Managers: full access, including assigning tickets and viewing reports
-- Technicians: update the status of tickets assigned to them
-- Everyone else (staff): report tickets and edit their own while still open
+- Managers: see and change all tickets, assign them and view reports
+- Technicians: see tickets assigned to them (and ones they reported),
+  and update the status of tickets assigned to them
+- Everyone else (staff): see only the tickets they reported, and edit
+  them while still open
 """
 from functools import wraps
 
 from django.core.exceptions import PermissionDenied
+from django.db.models import Q
+
+from .models import Ticket
 
 MANAGERS = 'Managers'
 TECHNICIANS = 'Technicians'
@@ -17,12 +22,20 @@ REPORTER_FIELDS = ['title', 'description', 'location', 'category', 'priority']
 TECHNICIAN_FIELDS = ['status']
 
 
+def _group_names(user):
+    # Role checks happen several times per request (views, templates), so load
+    # the user's groups once and cache them on the user object
+    if not hasattr(user, '_group_names_cache'):
+        user._group_names_cache = set(user.groups.values_list('name', flat=True))
+    return user._group_names_cache
+
+
 def is_manager(user):
-    return user.is_superuser or user.groups.filter(name=MANAGERS).exists()
+    return user.is_superuser or MANAGERS in _group_names(user)
 
 
 def is_technician(user):
-    return user.groups.filter(name=TECHNICIANS).exists()
+    return TECHNICIANS in _group_names(user)
 
 
 def role_name(user):
@@ -31,6 +44,15 @@ def role_name(user):
     if is_technician(user):
         return 'Technician'
     return 'Staff'
+
+
+def visible_tickets(user):
+    """The tickets a user is allowed to see. Every ticket query in the views starts here."""
+    if is_manager(user):
+        return Ticket.objects.all()
+    if is_technician(user):
+        return Ticket.objects.filter(Q(assigned_to=user) | Q(created_by=user))
+    return Ticket.objects.filter(created_by=user)
 
 
 def creatable_fields(user):
