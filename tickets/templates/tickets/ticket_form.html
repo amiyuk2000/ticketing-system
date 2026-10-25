@@ -1,11 +1,35 @@
 {% extends 'base.html' %}
 
-{% block content %}
-<h1>New Ticket</h1>
+{% block title %}{% if ticket %}Edit Ticket{% else %}New Ticket{% endif %} · Ticketing System{% endblock %}
 
-<form method="post">
-    {% csrf_token %}
-    {{ form.as_p }}
-    <button type="submit" class="btn">Create Ticket</button>
-</form>
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <h1 class="h3 mb-3">{% if ticket %}Edit Ticket{% else %}New Ticket{% endif %}</h1>
+
+        <form method="post" class="card card-body shadow-sm" novalidate>
+            {% csrf_token %}
+            {% for error in form.non_field_errors %}
+            <div class="alert alert-danger">{{ error }}</div>
+            {% endfor %}
+
+            <div class="row g-3">
+                {% for field in form %}
+                <div class="{% if field.name == 'title' or field.name == 'description' %}col-12{% else %}col-md-6{% endif %}">
+                    <label for="{{ field.id_for_label }}" class="form-label">{{ field.label }}</label>
+                    {{ field }}
+                    {% if field.errors %}
+                    <div class="text-danger small mt-1">{{ field.errors|join:" " }}</div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+
+            <div class="d-flex gap-2 mt-4">
+                <button type="submit" class="btn btn-primary">{% if ticket %}Save Changes{% else %}Create Ticket{% endif %}</button>
+                <a href="{% if ticket %}{% url 'ticket_detail' ticket.pk %}{% else %}{% url 'ticket_list' %}{% endif %}" class="btn btn-outline-secondary">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
 {% endblock %}

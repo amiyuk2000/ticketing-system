@@ -10,7 +10,8 @@ A Django web app for reporting and tracking facilities issues (electrical, plumb
 
 ## Features
 
-- Create and view tickets with title, description, location, category, priority, status and assignee
+- Create, view and edit tickets with title, description, location, category, priority, status and assignee
+- Responsive Bootstrap 5 UI with colour-coded priority and status badges
 - Filter the ticket list by location (partial match), category, priority and status
 - "My Assigned" view showing only the tickets assigned to the logged-in user
 - Ticket counts per category
@@ -85,6 +86,7 @@ Settings are read from environment variables. The defaults work for local develo
 2. On the **Web** tab, add a new web app with **Manual configuration** and Python 3.12.
 3. Set **Virtualenv** to `/home/amiyuk2000/.virtualenvs/venv`.
 4. Replace the contents of the **WSGI configuration file** with:
+
    ```python
    import os, sys
    path = '/home/amiyuk2000/ticketing-system'
@@ -99,6 +101,7 @@ Settings are read from environment variables. The defaults work for local develo
    from django.core.wsgi import get_wsgi_application
    application = get_wsgi_application()
    ```
+
    To generate a secret key:
    `python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"`
 5. Under **Static files**, map URL `/static/` to `/home/amiyuk2000/ticketing-system/staticfiles`.

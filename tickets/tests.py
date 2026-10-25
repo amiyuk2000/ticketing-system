@@ -60,6 +60,21 @@ class TicketViewTests(TestCase):
         self.assertContains(response, 'AC broken')
         self.assertNotContains(response, 'Leaking tap')
 
+    def test_edit_ticket(self):
+        self.client.force_login(self.user)
+        response = self.client.post(reverse('ticket_edit', args=[self.hvac.pk]), {
+            'title': 'AC broken', 'description': 'Too hot', 'location': 'Room 1',
+            'category': 'hvac', 'priority': 4, 'status': 'resolved',
+        })
+        self.assertRedirects(response, reverse('ticket_detail', args=[self.hvac.pk]))
+        self.hvac.refresh_from_db()
+        self.assertEqual(self.hvac.status, 'resolved')
+
+    def test_edit_form_prefilled(self):
+        self.client.force_login(self.user)
+        response = self.client.get(reverse('ticket_edit', args=[self.hvac.pk]))
+        self.assertContains(response, 'value="AC broken"')
+
     def test_counts_by_category(self):
         self.client.force_login(self.user)
         response = self.client.get(reverse('ticket_counts_by_category'))

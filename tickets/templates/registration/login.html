@@ -1,12 +1,35 @@
 {% extends 'base.html' %}
 
-{% block content %}
-<h1>Log in</h1>
+{% block title %}Log in · Ticketing System{% endblock %}
 
-<form method="post">
-    {% csrf_token %}
-    {{ form.as_p }}
-    <input type="hidden" name="next" value="{{ next }}">
-    <button type="submit" class="btn">Log in</button>
-</form>
+{% block content %}
+<div class="row justify-content-center mt-md-5">
+    <div class="col-sm-8 col-md-6 col-lg-4">
+        <div class="card shadow-sm">
+            <div class="card-body p-4">
+                <h1 class="h4 text-center mb-1">Welcome back</h1>
+                <p class="text-center text-muted small mb-4">Log in to manage facilities tickets</p>
+
+                {% if form.errors %}
+                <div class="alert alert-danger py-2 small">Your username and password didn't match. Please try again.</div>
+                {% endif %}
+
+                <form method="post">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label for="id_username" class="form-label">Username</label>
+                        <input type="text" name="username" id="id_username" class="form-control" value="{{ form.username.value|default:'' }}" autocomplete="username" autofocus required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="id_password" class="form-label">Password</label>
+                        <input type="password" name="password" id="id_password" class="form-control" autocomplete="current-password" required>
+                    </div>
+                    <input type="hidden" name="next" value="{{ next }}">
+                    <button type="submit" class="btn btn-primary w-100">Log in</button>
+                </form>
+            </div>
+        </div>
+        <p class="text-center text-muted small mt-3">Demo account: <code>demo</code> / <code>demo1234</code></p>
+    </div>
+</div>
 {% endblock %}

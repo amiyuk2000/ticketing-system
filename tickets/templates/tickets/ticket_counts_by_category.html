@@ -1,22 +1,28 @@
 {% extends 'base.html' %}
 
-{% block content %}
-<h1>Ticket Counts by Category</h1>
+{% block title %}Reports · Ticketing System{% endblock %}
 
-<table>
-    <thead>
-        <tr>
-            <th>Category</th>
-            <th>Count</th>
-        </tr>
-    </thead>
-    <tbody>
-        {% for count in ticket_counts %}
-        <tr>
-            <td>{{ count.category }}</td>
-            <td>{{ count.count }}</td>
-        </tr>
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="h3 mb-0">Tickets by Category</h1>
+    <span class="text-muted">{{ total }} ticket{{ total|pluralize }} in total</span>
+</div>
+
+<div class="card shadow-sm">
+    <div class="card-body">
+        {% for row in ticket_counts %}
+        <div class="mb-3">
+            <div class="d-flex justify-content-between mb-1">
+                <a href="{% url 'ticket_list' %}?category={{ row.category }}" class="fw-medium text-decoration-none">{{ row.label }}</a>
+                <span class="text-muted">{{ row.count }} ({{ row.percent }}%)</span>
+            </div>
+            <div class="progress" role="progressbar" aria-label="{{ row.label }}" aria-valuenow="{{ row.percent }}" aria-valuemin="0" aria-valuemax="100" style="height: 10px;">
+                <div class="progress-bar" style="width: {{ row.percent }}%"></div>
+            </div>
+        </div>
+        {% empty %}
+        <p class="text-center text-muted my-3">No tickets yet.</p>
         {% endfor %}
-    </tbody>
-</table>
+    </div>
+</div>
 {% endblock %}
